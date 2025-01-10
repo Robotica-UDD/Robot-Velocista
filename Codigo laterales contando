@@ -1,0 +1,129 @@
+#include <Arduino.h>
+
+#define SENSOR_DERECHO_PIN 35
+#define SENSOR_IZQUIERDO_PIN 33
+#define CALIBRATION_TIME 5000 // Tiempo de calibración en milisegundos
+#define MAPPED_MAX 1000       // Valor máximo del rango mapeado
+
+// Variables para el sensor derecho
+int valorSensorDerecho = 0;
+int valorSensorDerechoMapeado = 0;
+int valorMinimoDerecho = 4095;
+int valorMaximoDerecho = 0;
+int umbralDerecho = 0;
+bool estadoActualDerecho = false;
+bool estadoPrevioDerecho = false;
+unsigned int contadorMarcasDerecho = 0;
+
+// Variables para el sensor izquierdo
+int valorSensorIzquierdo = 0;
+int valorSensorIzquierdoMapeado = 0;
+int valorMinimoIzquierdo = 4095;
+int valorMaximoIzquierdo = 0;
+int umbralIzquierdo = 0;
+bool estadoActualIzquierdo = false;
+bool estadoPrevioIzquierdo = false;
+unsigned int contadorMarcasIzquierdo = 0;
+
+unsigned long tiempoCalibracion = 0;
+bool calibracionHecha = false;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(SENSOR_DERECHO_PIN, INPUT);
+  pinMode(SENSOR_IZQUIERDO_PIN, INPUT);
+
+  // Calibración inicial
+  Serial.println("Iniciando calibración...");
+  tiempoCalibracion = millis();
+}
+
+void loop() {
+  // Realizar calibración durante un tiempo definido
+  if (!calibracionHecha) {
+    unsigned long tiempoActual = millis();
+
+    // Leer valores de los sensores
+    valorSensorDerecho = analogRead(SENSOR_DERECHO_PIN);
+    valorSensorIzquierdo = analogRead(SENSOR_IZQUIERDO_PIN);
+
+    // Actualizar valores mínimo y máximo del sensor derecho
+    if (valorSensorDerecho < valorMinimoDerecho) {
+      valorMinimoDerecho = valorSensorDerecho;
+    }
+    if (valorSensorDerecho > valorMaximoDerecho) {
+      valorMaximoDerecho = valorSensorDerecho;
+    }
+
+    // Actualizar valores mínimo y máximo del sensor izquierdo
+    if (valorSensorIzquierdo < valorMinimoIzquierdo) {
+      valorMinimoIzquierdo = valorSensorIzquierdo;
+    }
+    if (valorSensorIzquierdo > valorMaximoIzquierdo) {
+      valorMaximoIzquierdo = valorSensorIzquierdo;
+    }
+
+    // Verificar si terminó el tiempo de calibración
+    if (tiempoActual - tiempoCalibracion >= CALIBRATION_TIME) {
+      calibracionHecha = true;
+      umbralDerecho = (valorMinimoDerecho + valorMaximoDerecho) / 2;
+      umbralIzquierdo = (valorMinimoIzquierdo + valorMaximoIzquierdo) / 2;
+
+      Serial.println("Calibración completada.");
+      Serial.print("Sensor derecho - Valor mínimo: ");
+      Serial.println(valorMinimoDerecho);
+      Serial.print("Sensor derecho - Valor máximo: ");
+      Serial.println(valorMaximoDerecho);
+      Serial.print("Sensor derecho - Umbral calculado: ");
+      Serial.println(umbralDerecho);
+
+      Serial.print("Sensor izquierdo - Valor mínimo: ");
+      Serial.println(valorMinimoIzquierdo);
+      Serial.print("Sensor izquierdo - Valor máximo: ");
+      Serial.println(valorMaximoIzquierdo);
+      Serial.print("Sensor izquierdo - Umbral calculado: ");
+      Serial.println(umbralIzquierdo);
+    }
+    delay(50); // Reducir la frecuencia de lectura durante calibración
+    return;
+  }
+
+  // Leer valores analógicos de los sensores y mapearlos
+  valorSensorDerecho = analogRead(SENSOR_DERECHO_PIN);
+  valorSensorDerechoMapeado = map(valorSensorDerecho, valorMinimoDerecho, valorMaximoDerecho, 0, MAPPED_MAX);
+  valorSensorDerechoMapeado = constrain(valorSensorDerechoMapeado, 0, MAPPED_MAX);
+
+  valorSensorIzquierdo = analogRead(SENSOR_IZQUIERDO_PIN);
+  valorSensorIzquierdoMapeado = map(valorSensorIzquierdo, valorMinimoIzquierdo, valorMaximoIzquierdo, 0, MAPPED_MAX);
+  valorSensorIzquierdoMapeado = constrain(valorSensorIzquierdoMapeado, 0, MAPPED_MAX);
+
+  // Mostrar valores de los sensores
+  Serial.print("Sensor derecho - Valor mapeado: ");
+  Serial.println(valorSensorDerechoMapeado);
+  Serial.print("Sensor izquierdo - Valor mapeado: ");
+  Serial.println(valorSensorIzquierdoMapeado);
+
+  // Determinar el estado actual de cada sensor basado en sus respectivos umbrales
+  estadoActualDerecho = (valorSensorDerecho > umbralDerecho);
+  estadoActualIzquierdo = (valorSensorIzquierdo > umbralIzquierdo);
+
+  // Detectar una transición de blanco a negro en el sensor derecho
+  if (estadoActualDerecho && !estadoPrevioDerecho) {
+    contadorMarcasDerecho++;
+    Serial.print("Sensor derecho - ¡Marca detectada! Contador de marcas: ");
+    Serial.println(contadorMarcasDerecho);
+  }
+
+  // Detectar una transición de blanco a negro en el sensor izquierdo
+  if (estadoActualIzquierdo && !estadoPrevioIzquierdo) {
+    contadorMarcasIzquierdo++;
+    Serial.print("Sensor izquierdo - ¡Marca detectada! Contador de marcas: ");
+    Serial.println(contadorMarcasIzquierdo);
+  }
+
+  // Actualizar estados previos
+  estadoPrevioDerecho = estadoActualDerecho;
+  estadoPrevioIzquierdo = estadoActualIzquierdo;
+
+  delay(50); // Pequeño retraso para evitar rebotes
+}
